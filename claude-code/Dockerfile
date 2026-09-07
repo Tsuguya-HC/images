@@ -1,15 +1,15 @@
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
 # renovate: datasource=github-releases depName=cli/cli extractVersion=^v(?<version>.*)$
-ARG GH_VERSION=2.97.0
+ARG GH_VERSION=2.100.0
 # renovate: datasource=github-releases depName=spinframework/spin extractVersion=^v(?<version>.*)$
-ARG SPIN_VERSION=4.0.2
+ARG SPIN_VERSION=4.1.0
 # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
-ARG KUBECTL_VERSION=1.36.4
+ARG KUBECTL_VERSION=1.37.0
 # renovate: datasource=github-releases depName=helm/helm extractVersion=^v(?<version>.*)$
 ARG HELM_VERSION=4.2.4
 # renovate: datasource=github-releases depName=grafana/loki extractVersion=^v(?<version>.*)$
-ARG LOGCLI_VERSION=3.7.6
+ARG LOGCLI_VERSION=3.7.7
 # renovate: datasource=golang-version depName=go
 ARG GO_VERSION=1.26.0
 
