@@ -1,0 +1,145 @@
+#!/bin/bash
+# parts — クラスタ側 handler が動く前に、必要な部品だけを parts リポから引いて敷く。
+#
+#   parts -s pr-review -c verdict-protocol -c untrusted-input
+#
+#   -s <name>  skills/<name>/      → $PARTS_OUT/skills/<name>/
+#   -a <name>  agents/<name>.md    → $PARTS_OUT/agents/<name>.md
+#   -c <name>  claude-md/<name>.md → 指定順に連結して $PARTS_OUT/CLAUDE.md
+#
+# 取得は sparse checkout で、指定した部品のパスしか取らない。版は PARTS_REF（commit SHA）で
+# 固定し、ブランチ名は受け付けない — 同じ handler が run ごとに違う中身で動くのを防ぐため。
+# 無い部品は失敗にして Pod を上げない。
+#
+# 認証: GITHUB_TOKEN があればそれを使う（ローカル検証用）。無ければ GitHub App の秘密鍵
+# （GITHUB_APP_PRIVATE_KEY_FILE）と GITHUB_APP_ID から installation token を作る。
+# installation は PARTS_REPO から解決する（installation id は直書きしない — アカウント移管で
+# 変わるため。argo-tools/github-auth.sh と同じ理由）。token はプロセスの環境にだけ置き、
+# URL にも .git/config にも書かない。
+set -euo pipefail
+
+PARTS_REPO="${PARTS_REPO:-Tsuguya-HC/parts}"
+PARTS_OUT="${PARTS_OUT:-/parts}"
+GITHUB_APP_PRIVATE_KEY_FILE="${GITHUB_APP_PRIVATE_KEY_FILE:-/github-app/private-key}"
+API="https://api.github.com"
+
+skills=()
+agents=()
+claude_md=()
+
+usage() {
+  echo "usage: parts [-s skill]... [-a agent]... [-c claude-md]...   (PARTS_REF=<commit sha> required)" >&2
+  exit 2
+}
+
+check_name() {
+  case "$1" in
+    '' | *[!A-Za-z0-9._-]* | .* ) echo "parts: invalid name: '$1'" >&2; exit 2 ;;
+  esac
+}
+
+while getopts ':s:a:c:' opt; do
+  case "$opt" in
+    s) check_name "$OPTARG"; skills+=("$OPTARG") ;;
+    a) check_name "$OPTARG"; agents+=("$OPTARG") ;;
+    c) check_name "$OPTARG"; claude_md+=("$OPTARG") ;;
+    *) usage ;;
+  esac
+done
+shift $((OPTIND - 1))
+[ $# -eq 0 ] || usage
+[ $(( ${#skills[@]} + ${#agents[@]} + ${#claude_md[@]} )) -gt 0 ] || usage
+
+case "${PARTS_REF:-}" in
+  *[!0-9a-f]* | '') echo "parts: PARTS_REF must be a full lowercase commit sha" >&2; exit 2 ;;
+esac
+[ ${#PARTS_REF} -eq 40 ] || { echo "parts: PARTS_REF must be a full lowercase commit sha" >&2; exit 2; }
+
+# --- 認証 -----------------------------------------------------------------------------
+b64url() { openssl base64 -e -A | tr '+/' '-_' | tr -d '='; }
+
+mint_token() {
+  local now iat exp header payload sig jwt resp inst
+  [ -r "$GITHUB_APP_PRIVATE_KEY_FILE" ] || { echo "parts: no GITHUB_TOKEN and no readable $GITHUB_APP_PRIVATE_KEY_FILE" >&2; exit 1; }
+  [ -n "${GITHUB_APP_ID:-}" ] || { echo "parts: GITHUB_APP_ID is required to mint a token" >&2; exit 1; }
+  now=$(date +%s); iat=$((now - 60)); exp=$((now + 540))
+  header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+  payload=$(printf '{"iss":"%s","iat":%d,"exp":%d}' "$GITHUB_APP_ID" "$iat" "$exp" | b64url)
+  sig=$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -sign "$GITHUB_APP_PRIVATE_KEY_FILE" -binary | b64url)
+  jwt="${header}.${payload}.${sig}"
+  resp=$(curl -sfL -H "Authorization: Bearer ${jwt}" -H 'Accept: application/vnd.github+json' \
+    "${API}/repos/${PARTS_REPO}/installation") || { echo "parts: failed to resolve installation for ${PARTS_REPO}" >&2; exit 1; }
+  inst=$(printf '%s' "$resp" | jq -r .id)
+  [ -n "$inst" ] && [ "$inst" != null ] || { echo "parts: no installation for ${PARTS_REPO}" >&2; exit 1; }
+  resp=$(curl -sf -X POST -H "Authorization: Bearer ${jwt}" -H 'Accept: application/vnd.github+json' \
+    "${API}/app/installations/${inst}/access_tokens") || { echo "parts: failed to create installation token" >&2; exit 1; }
+  printf '%s' "$resp" | jq -er .token
+}
+
+token="${GITHUB_TOKEN:-}"
+[ -n "$token" ] || token=$(mint_token)
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$token" | openssl base64 -e -A)"
+export GIT_CONFIG_VALUE_0
+unset token
+export GIT_TERMINAL_PROMPT=0
+
+# --- 取得 -----------------------------------------------------------------------------
+mkdir -p "$PARTS_OUT"
+work=$(mktemp -d "${PARTS_OUT}/.work.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+
+paths=()
+for n in "${skills[@]}";    do paths+=("skills/$n"); done
+for n in "${agents[@]}";    do paths+=("agents/$n.md"); done
+for n in "${claude_md[@]}"; do paths+=("claude-md/$n.md"); done
+
+git clone --quiet --filter=blob:none --no-checkout --depth 1 "https://github.com/${PARTS_REPO}.git" "$work/src"
+git -C "$work/src" sparse-checkout set --no-cone "${paths[@]}"
+git -C "$work/src" fetch --quiet --depth 1 origin "$PARTS_REF"
+git -C "$work/src" checkout --quiet "$PARTS_REF"
+
+missing=()
+for p in "${paths[@]}"; do [ -e "$work/src/$p" ] || missing+=("$p"); done
+if [ ${#missing[@]} -gt 0 ]; then
+  echo "parts: not found in ${PARTS_REPO}@${PARTS_REF}:" >&2
+  printf '  %s\n' "${missing[@]}" >&2
+  exit 1
+fi
+for n in "${skills[@]}"; do
+  [ -f "$work/src/skills/$n/SKILL.md" ] || { echo "parts: skills/$n has no SKILL.md" >&2; exit 1; }
+done
+
+symlinks=()
+for p in "${paths[@]}"; do
+  while IFS= read -r -d '' l; do
+    symlinks+=("${l#"$work/src/"}")
+  done < <(find "$work/src/$p" -type l -print0)
+done
+if [ ${#symlinks[@]} -gt 0 ]; then
+  echo "parts: symlink not allowed:" >&2
+  printf '  %s\n' "${symlinks[@]}" >&2
+  exit 1
+fi
+
+# --- 敷く -----------------------------------------------------------------------------
+for n in "${skills[@]}"; do
+  mkdir -p "$PARTS_OUT/skills"
+  rm -rf "$PARTS_OUT/skills/$n"
+  cp -RP "$work/src/skills/$n" "$PARTS_OUT/skills/$n"
+done
+for n in "${agents[@]}"; do
+  mkdir -p "$PARTS_OUT/agents"
+  cp -P "$work/src/agents/$n.md" "$PARTS_OUT/agents/$n.md"
+done
+if [ ${#claude_md[@]} -gt 0 ]; then
+  : > "$PARTS_OUT/CLAUDE.md"
+  for n in "${claude_md[@]}"; do
+    cat "$work/src/claude-md/$n.md" >> "$PARTS_OUT/CLAUDE.md"
+    printf '\n' >> "$PARTS_OUT/CLAUDE.md"
+  done
+fi
+
+echo "parts: ${PARTS_REPO}@${PARTS_REF} → ${PARTS_OUT}"
+printf '  %s\n' "${paths[@]}"
