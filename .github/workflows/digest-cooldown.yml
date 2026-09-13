@@ -34,7 +34,7 @@ jobs:
       - uses: Tsuguya-HC/digest-cooldown@7c1f020a6dccaf3a8daff6b34fafafe3743a6429 # v1.2.0
         with:
           cooldown-days: 3
-          skip-registries: registry.infra.tgy.io,ghcr.io/tsuguya
+          skip-registries: registry.infra.tgy.io,ghcr.io/tsuguya-hc
           gate-version-bumps: true
           gate-authors: renovate[bot]
           always-report: true
