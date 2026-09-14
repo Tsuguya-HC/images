@@ -62,4 +62,9 @@ ENV PATH="/usr/local/share/pnpm:/usr/local/cargo/bin:/usr/local/go/bin:${PATH}"
 # 引いて敷くコマンド。中身は git の sparse checkout と GitHub App の token 生成だけ。
 COPY --chmod=0755 parts /usr/local/bin/parts
 
+# openrouter-broker — 実装 handler のサイドカーが動かす。API キーをエージェントの
+# 到達できない別コンテナに閉じ込め、Authorization はここで付ける（home-cluster の
+# manifests/claude-code-build/）。エージェント側には実値を一切渡さない。
+COPY --chmod=0755 openrouter-broker.js /usr/local/bin/openrouter-broker.js
+
 USER 65532:65532
