@@ -16,7 +16,7 @@ ARG GO_VERSION=1.26.0
 RUN apk add --no-cache \
       bash curl git jq libgcc libstdc++ make openssl ripgrep unzip \
       rustup gcc musl-dev \
-      e2fsprogs util-linux-misc
+      e2fsprogs setpriv
 
 RUN curl -fsSL https://claude.ai/install.sh | bash \
     && cp /root/.local/share/claude/versions/* /usr/local/bin/claude \
