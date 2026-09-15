@@ -15,6 +15,17 @@ const https = require('node:https')
 const TOKEN = process.env.OPENROUTER_TOKEN
 const PORT = Number(process.env.BROKER_PORT || 8787)
 const UPSTREAM = process.env.BROKER_UPSTREAM || 'openrouter.ai'
+// 実キーで叩けるものを、エージェントが実際に必要とする 1 つに絞る。claude CLI は
+// base URL に /v1/messages を足すので、通るのは POST /api/v1/messages（と
+// /count_tokens のような下位パス）だけ。キー管理やアカウント情報の
+// エンドポイントに実キーで到達させない。
+const ALLOW_PREFIX = process.env.BROKER_ALLOW_PREFIX || '/api/v1/messages'
+const ALLOW_METHODS = new Set(['POST'])
+// 停止は publish サイドカーと terminationGracePeriodSeconds を分け合う。kubelet は
+// サイドカーを init の逆順で止めるので、ここで手間取ると publish が verdict を
+// seal する前に Pod ごと SIGKILL される。開いた接続ごと畳んで、それでも返らなければ
+// 期限で降りる。
+const SHUTDOWN_DEADLINE_MS = Number(process.env.BROKER_SHUTDOWN_DEADLINE_MS || 3000)
 
 if (!TOKEN) {
   console.error('openrouter-broker: OPENROUTER_TOKEN is not set')
@@ -36,6 +47,16 @@ const DROP = new Set([
 const agent = new https.Agent({ keepAlive: true })
 
 const server = http.createServer((req, res) => {
+  const path = (req.url || '').split('?')[0]
+  if (!ALLOW_METHODS.has(req.method || '') || !path.startsWith(ALLOW_PREFIX)) {
+    // 拒否したことは残す（診断のため）。本文は出さない。
+    console.error(`openrouter-broker: rejected ${req.method} ${path}`)
+    res.writeHead(403, { 'content-type': 'text/plain' })
+    res.end('openrouter-broker: only POST ' + ALLOW_PREFIX + ' is allowed\n')
+    req.resume()
+    return
+  }
+
   const headers = {}
   for (const [key, value] of Object.entries(req.headers)) {
     if (!DROP.has(key.toLowerCase())) headers[key] = value
@@ -70,5 +91,11 @@ server.listen(PORT, '127.0.0.1', () => {
 })
 
 for (const signal of ['SIGTERM', 'SIGINT']) {
-  process.on(signal, () => server.close(() => process.exit(0)))
+  process.on(signal, () => {
+    const deadline = setTimeout(() => process.exit(0), SHUTDOWN_DEADLINE_MS)
+    deadline.unref()
+    server.close(() => process.exit(0))
+    // close() だけでは keep-alive の接続が残ると callback が返らない。
+    server.closeAllConnections()
+  })
 }
