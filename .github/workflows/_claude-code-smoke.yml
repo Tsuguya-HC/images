@@ -1,0 +1,39 @@
+name: claude-code-smoke
+
+# claude-code イメージ専用の build + スモークテスト leaf。hadolint は構文しか
+# 見ないので、ベースを総入れ替えするような変更（Dockerfile:1-7 参照）でも
+# 「文法は正しいが中身が壊れている」場合はここで検出する。
+#
+# claude-code/ にベタ書きで、workflow_call の inputs 化はしていない。argo-tools /
+# talos-tools にも同様のスモークが要るときは、この中身を書き換えて共有しようと
+# せず別ファイルを作ること（3 イメージはベースも中身も別物で、共通化すると
+# inputs が増えるだけで可読性が落ちる）。
+#
+# オーケストレーターは ci.yaml で、必須チェックはそこの `CI Gate` 1 個だけ。
+# 直接のトリガーは持たない — leaf 自身が pull_request で起動すると、同じ
+# コミットに対して gate 経由の結果と重複した check run が並ぶ。
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  smoke:
+    name: build + smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: docker build
+        run: docker build -t claude-code-smoke:ci claude-code/
+
+      - name: smoke test (non-root)
+        run: |
+          docker run --rm -u 65532:65532 \
+            -v "${PWD}/claude-code/smoke-test.sh:/tmp/smoke-test.sh:ro" \
+            claude-code-smoke:ci bash /tmp/smoke-test.sh
