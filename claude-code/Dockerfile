@@ -40,8 +40,16 @@ ARG PYYAML_VERSION=6.0.3
 # e2fsprogs は block scratch の mkfs に要る（#52）。ripgrep は claude が使う。
 # bash / ca-certificates は Debian の slim に既にある。取得は curl に統一する
 # （alpine 版は wget と curl が混在しており hadolint DL4001 を ignore していた）。
+#
+# apt は既定で http://deb.debian.org を引くが、このイメージをビルドするクラスタ側の
+# egress（home-cluster の manifests/image-build/netpol.yaml）は 0.0.0.0/0 に対して
+# 443 しか開けていない。alpine の apk が https だったので今まで顕在化していなかった。
+# ポリシーを広げるのではなく取得を https に寄せる（2026-09-20 実測: 書き換えないと
+# クラスタのビルドが `E: Unable to locate package curl` で exit 100。手元の docker
+# build は egress 制限が無いので通ってしまい、ここだけ CI では再現しない）。
 # hadolint ignore=DL3008
-RUN apt-get update \
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
       curl git jq make openssl ripgrep unzip xz-utils \
       gcc libc6-dev \
