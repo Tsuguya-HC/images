@@ -71,6 +71,9 @@ jobs:
               - '**/Dockerfile'
               - '.hadolint.yaml'
               - '.github/workflows/_hadolint.yml'
+              - '.github/workflows/_claude-code-smoke.yml'
+              - 'claude-code/smoke-test.sh'
+              - 'claude-code/**'
             workflows:
               - '.github/workflows/**'
               - '.github/zizmor.yml'
@@ -87,6 +90,15 @@ jobs:
     # 呼び出しには当たらない — GitHub が同じ commit から解決し FS を見ない。
     # ignore は行単位。ステップの `uses: ./my-action` は今も検出される。
     uses: ./.github/workflows/_hadolint.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+
+  # claude-code の build + スモークテスト。3 イメージ共通化はしない — argo-tools /
+  # talos-tools は alpine のままで、対象を広げるとこの PR の範囲を超える。
+  claude-code-smoke:
+    needs: detect
+    if: ${{ needs.detect.outputs.docker == 'true' }}
+    uses: ./.github/workflows/_claude-code-smoke.yml # zizmor: ignore[self-repository]
     permissions:
       contents: read
 
@@ -117,7 +129,7 @@ jobs:
   # 緑」が必須チェックを満たしてしまう。
   gate:
     name: CI Gate
-    needs: [detect, lint-workflows, lint-renovate, hadolint]
+    needs: [detect, lint-workflows, lint-renovate, hadolint, claude-code-smoke]
     # `always()` ではなく `!cancelled()`。always() だと run をキャンセルしたとき
     # 全ての leaf が `cancelled` を返し、下の case をすり抜けて必須チェックが
     # 失敗として記録される。
