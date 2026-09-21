@@ -29,6 +29,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # ビルドコンテキストがイメージのディレクトリで切られているので、argo-tools と
+      # 同じスクリプトを claude-code/ にも置いている。片方だけ直して黙ってずれないように
+      # 一致を見る。
+      - name: github-signed-commit.sh is in sync with argo-tools
+        run: cmp argo-tools/github-signed-commit.sh claude-code/github-signed-commit.sh
+
       - name: docker build
         run: docker build -t claude-code-smoke:ci claude-code/
 
