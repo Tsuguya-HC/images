@@ -119,6 +119,15 @@ ENV PATH="/usr/local/share/pnpm:/usr/local/cargo/bin:/usr/local/go/bin:${PATH}"
 # 引いて敷くコマンド。中身は git の sparse checkout と GitHub App の token 生成だけ。
 COPY --chmod=0755 parts /usr/local/bin/parts
 
+# github-signed-commit.sh — 署名付きコミットを GitHub API で作る。handler は GitHub の
+# 資格情報を持たず、gateway 経由で `gh api` を呼ぶ（home-cluster #1038）。以前は
+# handler が init で argo-tools から emptyDir へコピーしていた。
+#
+# **argo-tools/github-signed-commit.sh と同一のファイル**で、CI（claude-code-smoke）が
+# 一致を確かめている。argo-tools のビルドから COPY --from で取り出す形は、GitHub の
+# ランナーが Harbor を引けず（403）CI のビルドが通らないので使えない。
+COPY --chmod=0755 github-signed-commit.sh /usr/local/bin/github-signed-commit.sh
+
 # openrouter-broker — 実装 handler のサイドカーが動かす。API キーをエージェントの
 # 到達できない別コンテナに閉じ込め、Authorization はここで付ける（home-cluster の
 # manifests/claude-code-build/）。エージェント側には実値を一切渡さない。

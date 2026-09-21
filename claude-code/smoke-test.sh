@@ -46,6 +46,9 @@ check "curl --version" curl --version
 check "openssl version" openssl version
 check "unzip -v" unzip -v
 check "xz --version" xz --version
+# argo-tools のビルドから COPY --from で取り出しているので、digest を上げ損ねたり
+# パスが変わったりすると黙って消える。--version は無いので実行ビットで見る。
+check "github-signed-commit.sh is executable" test -x /usr/local/bin/github-signed-commit.sh
 
 # gcc は Dockerfile 内のどの RUN でもコンパイルに使われず一度も exercise されない
 # ため、--version ではなく実コンパイルまでやる（非 root で /tmp に書けることも
