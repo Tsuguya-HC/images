@@ -40,7 +40,16 @@ if [ -z "$BRANCH" ]; then
   BRANCH=$(git rev-parse --abbrev-ref HEAD)
 fi
 
-HEAD_SHA=$(gh api "repos/$REPO/git/ref/heads/$BRANCH" --jq '.object.sha')
+# A branch cut locally does not exist on GitHub yet, and a caller that
+# cannot push has no other way to make it exist. Create the ref at the
+# commit the working tree was cloned from — the remote default branch,
+# which GitHub knows. An existing ref is only read, so the parent below
+# still guards against overwriting someone else's commits.
+if ! HEAD_SHA=$(gh api "repos/$REPO/git/ref/heads/$BRANCH" --jq '.object.sha' 2>/dev/null); then
+  HEAD_SHA=$(git rev-parse --verify origin/HEAD)
+  gh api -X POST "repos/$REPO/git/refs" \
+    -f "ref=refs/heads/$BRANCH" -f "sha=$HEAD_SHA" > /dev/null
+fi
 BASE_TREE=$(gh api "repos/$REPO/git/commits/$HEAD_SHA" --jq '.tree.sha')
 
 TREE_ITEMS="[]"
