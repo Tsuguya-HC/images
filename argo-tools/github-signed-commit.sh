@@ -5,7 +5,8 @@ usage() {
   echo "Usage: github-signed-commit.sh -r OWNER/REPO -b BRANCH -m MESSAGE" >&2
   echo "" >&2
   echo "Creates a signed commit via GitHub API from staged changes." >&2
-  echo "Requires GH_TOKEN or /github-token/token to be available." >&2
+  echo "Requires gh to be authenticated (GH_TOKEN, GH_ENTERPRISE_TOKEN, or" >&2
+  echo "/github-token/token)." >&2
   exit 1
 }
 
@@ -24,29 +25,23 @@ done
 
 [ -z "$REPO" ] || [ -z "$MESSAGE" ] && usage
 
-if [ -z "${GH_TOKEN:-}" ] && [ -f /github-token/token ]; then
+if [ -z "${GH_TOKEN:-}" ] && [ -z "${GH_ENTERPRISE_TOKEN:-}" ] && [ -f /github-token/token ]; then
   GH_TOKEN=$(cat /github-token/token)
   export GH_TOKEN
 fi
 
-if [ -z "${GH_TOKEN:-}" ]; then
-  echo "Error: No GitHub token available" >&2
-  exit 1
-fi
-
-API="https://api.github.com"
-AUTH="Authorization: Bearer ${GH_TOKEN}"
-ACCEPT="Accept: application/vnd.github+json"
+# Every call goes through `gh api`, not curl. `gh` already decides the base
+# URL (api.github.com, or /api/v3 on GH_HOST), which token to send, and the
+# header form — so a caller that routes GitHub through a gateway by setting
+# GH_HOST (home-cluster #1038) needs nothing from this script, and one that
+# still holds a token sees no change.
 
 if [ -z "$BRANCH" ]; then
   BRANCH=$(git rev-parse --abbrev-ref HEAD)
 fi
 
-HEAD_SHA=$(curl -sf -H "$AUTH" -H "$ACCEPT" \
-  "$API/repos/$REPO/git/ref/heads/$BRANCH" | jq -r '.object.sha')
-
-BASE_TREE=$(curl -sf -H "$AUTH" -H "$ACCEPT" \
-  "$API/repos/$REPO/git/commits/$HEAD_SHA" | jq -r '.tree.sha')
+HEAD_SHA=$(gh api "repos/$REPO/git/ref/heads/$BRANCH" --jq '.object.sha')
+BASE_TREE=$(gh api "repos/$REPO/git/commits/$HEAD_SHA" --jq '.tree.sha')
 
 TREE_ITEMS="[]"
 
@@ -59,10 +54,9 @@ for file in $(git diff --cached --diff-filter=d --name-only); do
     MODE="100644"
   fi
 
-  CONTENT=$(base64 < "$file" | tr -d '\n')
-  BLOB_SHA=$(curl -sf -X POST -H "$AUTH" -H "$ACCEPT" \
-    -d "{\"content\":\"$CONTENT\",\"encoding\":\"base64\"}" \
-    "$API/repos/$REPO/git/blobs" | jq -r '.sha')
+  BLOB_SHA=$(jq -n --arg c "$(base64 < "$file" | tr -d '\n')" \
+      '{content: $c, encoding: "base64"}' \
+    | gh api -X POST "repos/$REPO/git/blobs" --input - --jq '.sha')
 
   TREE_ITEMS=$(printf '%s' "$TREE_ITEMS" | jq \
     --arg path "$file" --arg sha "$BLOB_SHA" --arg mode "$MODE" \
@@ -80,20 +74,19 @@ if [ "$TREE_ITEMS" = "[]" ]; then
   exit 1
 fi
 
-TREE_SHA=$(curl -sf -X POST -H "$AUTH" -H "$ACCEPT" \
-  -d "{\"base_tree\":\"$BASE_TREE\",\"tree\":$TREE_ITEMS}" \
-  "$API/repos/$REPO/git/trees" | jq -r '.sha')
+TREE_SHA=$(jq -n --arg base "$BASE_TREE" --argjson tree "$TREE_ITEMS" \
+    '{base_tree: $base, tree: $tree}' \
+  | gh api -X POST "repos/$REPO/git/trees" --input - --jq '.sha')
 
-COMMIT_SHA=$(curl -sf -X POST -H "$AUTH" -H "$ACCEPT" \
-  -d "{\"message\":$(printf '%s' "$MESSAGE" | jq -Rs .),\"tree\":\"$TREE_SHA\",\"parents\":[\"$HEAD_SHA\"]}" \
-  "$API/repos/$REPO/git/commits" | jq -r '.sha')
+COMMIT_SHA=$(jq -n --arg msg "$MESSAGE" --arg tree "$TREE_SHA" --arg parent "$HEAD_SHA" \
+    '{message: $msg, tree: $tree, parents: [$parent]}' \
+  | gh api -X POST "repos/$REPO/git/commits" --input - --jq '.sha')
 
 # `git/refs/` (plural), not `git/ref/`. The singular form is the read-only
-# endpoint — a PATCH to it returns 404, which `curl -sf` turns into exit 22
-# with nothing on stderr, so the commit is built and then silently discarded.
-curl -sf -X PATCH -H "$AUTH" -H "$ACCEPT" \
-  -d "{\"sha\":\"$COMMIT_SHA\"}" \
-  "$API/repos/$REPO/git/refs/heads/$BRANCH" > /dev/null
+# endpoint — a PATCH to it returns 404, so the commit is built and then
+# discarded.
+jq -n --arg sha "$COMMIT_SHA" '{sha: $sha}' \
+  | gh api -X PATCH "repos/$REPO/git/refs/heads/$BRANCH" --input - > /dev/null
 
 echo "Signed commit created: $COMMIT_SHA"
 
