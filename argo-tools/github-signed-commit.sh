@@ -24,9 +24,21 @@ done
 
 [ -z "$REPO" ] || [ -z "$MESSAGE" ] && usage
 
-if [ -z "${GH_TOKEN:-}" ] && [ -f /github-token/token ]; then
-  GH_TOKEN=$(cat /github-token/token)
-  export GH_TOKEN
+# GH_HOST is set when the caller goes through the in-cluster GitHub gateway
+# (home-cluster #1038). The Pod then holds no GitHub credential at all: the
+# token below is a caller key the gateway checks and swaps for the real
+# installation token. `gh` switches to GHES layout for any GH_HOST, so the
+# REST base is /api/v3 on that host — mirror it so this script and `gh`
+# always talk to the same place. Without GH_HOST nothing changes.
+if [ -n "${GH_HOST:-}" ]; then
+  API="https://${GH_HOST}/api/v3"
+  GH_TOKEN="${GH_TOKEN:-${GH_ENTERPRISE_TOKEN:-}}"
+else
+  API="https://api.github.com"
+  if [ -z "${GH_TOKEN:-}" ] && [ -f /github-token/token ]; then
+    GH_TOKEN=$(cat /github-token/token)
+    export GH_TOKEN
+  fi
 fi
 
 if [ -z "${GH_TOKEN:-}" ]; then
@@ -34,7 +46,6 @@ if [ -z "${GH_TOKEN:-}" ]; then
   exit 1
 fi
 
-API="https://api.github.com"
 AUTH="Authorization: Bearer ${GH_TOKEN}"
 ACCEPT="Accept: application/vnd.github+json"
 
