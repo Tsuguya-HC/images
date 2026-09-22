@@ -50,6 +50,46 @@ check "xz --version" xz --version
 # パスが変わったりすると黙って消える。--version は無いので実行ビットで見る。
 check "github-signed-commit.sh is executable" test -x /usr/local/bin/github-signed-commit.sh
 
+# parts の失敗経路（ネットワークに出ずに完結する範囲）。exit code だけでなく stderr の
+# 文言も照合する — ガードを削っても後段の mkdir -p "$PARTS_OUT"（既定 /parts、非 root
+# では Permission denied）が偶然同じ exit code を返し、変異が緑のまま通り抜けるため。
+# PARTS_OUT は書き込み可能な一時ディレクトリへ逃がし、GH_HOST は .invalid
+# （RFC 2606、解決されない）にして、ガードが壊れた場合は git clone 側の別エラーで
+# 落ちるようにする。成功経路（実 clone）はネットワークと鍵が要るためここでは対象外。
+dummy_ref="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+parts_out_dir="$(mktemp -d 2>/dev/null)" || parts_out_dir=""
+if [ -z "${parts_out_dir}" ]; then
+  echo "FAIL: parts smoke tests mktemp failed" >&2
+  fail=1
+else
+  trap 'rm -rf "${parts_out_dir}"' EXIT
+
+  check_exit() {
+    local desc="$1" want_code="$2" want_msg="$3"
+    shift 3
+    local got_code=0 stderr_out
+    stderr_out="$("$@" 2>&1 >/dev/null)" || got_code=$?
+    if [ "${got_code}" = "${want_code}" ] && printf '%s' "${stderr_out}" | grep -qF -- "${want_msg}"; then
+      echo "ok: ${desc}"
+    else
+      echo "FAIL: ${desc} (exit ${got_code}, want ${want_code}; stderr: ${stderr_out})" >&2
+      fail=1
+    fi
+  }
+
+  check_exit "parts rejects invalid GH_HOST" 2 "invalid GH_HOST" \
+    env -u GITHUB_TOKEN -u GH_ENTERPRISE_TOKEN GH_HOST='bad host!' PARTS_REF="${dummy_ref}" PARTS_OUT="${parts_out_dir}" \
+    parts -s x
+
+  check_exit "parts requires GH_ENTERPRISE_TOKEN when GH_HOST is set" 1 "GH_ENTERPRISE_TOKEN is empty" \
+    env -u GITHUB_TOKEN GH_HOST=parts-smoke.invalid GH_ENTERPRISE_TOKEN='' PARTS_REF="${dummy_ref}" PARTS_OUT="${parts_out_dir}" \
+    parts -s x
+
+  check_exit "parts rejects GH_ENTERPRISE_TOKEN with unexpected characters" 1 "unexpected characters" \
+    env -u GITHUB_TOKEN GH_HOST=parts-smoke.invalid GH_ENTERPRISE_TOKEN="$(printf 'bad\ntoken')" PARTS_REF="${dummy_ref}" PARTS_OUT="${parts_out_dir}" \
+    parts -s x
+fi
+
 # gcc は Dockerfile 内のどの RUN でもコンパイルに使われず一度も exercise されない
 # ため、--version ではなく実コンパイルまでやる（非 root で /tmp に書けることも
 # ついでに確認できる）。mktemp の失敗も他の check と同じ fail-soft 扱いにする —

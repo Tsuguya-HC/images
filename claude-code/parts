@@ -11,11 +11,16 @@
 # 固定し、ブランチ名は受け付けない — 同じ handler が run ごとに違う中身で動くのを防ぐため。
 # 無い部品は失敗にして Pod を上げない。
 #
-# 認証: GITHUB_TOKEN があればそれを使う（ローカル検証用）。無ければ GitHub App の秘密鍵
-# （GITHUB_APP_PRIVATE_KEY_FILE）と GITHUB_APP_ID から installation token を作る。
-# installation は PARTS_REPO から解決する（installation id は直書きしない — アカウント移管で
-# 変わるため。argo-tools/github-auth.sh と同じ理由）。token はプロセスの環境にだけ置き、
-# URL にも .git/config にも書かない。
+# 認証は 3 通り。上から順に見る:
+#   1. GITHUB_TOKEN     … その token で github.com から取る（ローカル検証用）
+#   2. GH_HOST          … gateway（home-cluster #1038）から取る。GH_ENTERPRISE_TOKEN は
+#                         gateway の呼び出し元鍵で、GitHub の資格情報ではない。gateway が
+#                         実 installation token に付け替える。`gh` と同じ env 名にしてある
+#   3. どちらも無い     … GitHub App の秘密鍵（GITHUB_APP_PRIVATE_KEY_FILE）と GITHUB_APP_ID
+#                         から installation token を作る。installation は PARTS_REPO から
+#                         解決する（id を直書きしない — アカウント移管で変わるため。
+#                         argo-tools/github-auth.sh と同じ理由）
+# 資格情報はプロセスの環境にだけ置き、URL にも .git/config にも書かない。
 set -euo pipefail
 
 PARTS_REPO="${PARTS_REPO:-Tsuguya-HC/parts}"
@@ -76,13 +81,31 @@ mint_token() {
   printf '%s' "$resp" | jq -er .token
 }
 
-token="${GITHUB_TOKEN:-}"
-[ -n "$token" ] || token=$(mint_token)
 export GIT_CONFIG_COUNT=1
-export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
-GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$token" | openssl base64 -e -A)"
+if [ -n "${GITHUB_TOKEN:-}" ] || [ -z "${GH_HOST:-}" ]; then
+  host=github.com
+  token="${GITHUB_TOKEN:-}"
+  [ -n "$token" ] || token=$(mint_token)
+  GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$token" | openssl base64 -e -A)"
+  unset token
+else
+  case "$GH_HOST" in
+    *[!A-Za-z0-9.-]* ) echo "parts: invalid GH_HOST: '$GH_HOST'" >&2; exit 2 ;;
+  esac
+  # GH_HOST があるのに鍵が無いときは App へ黙って落ちない。鍵を持たせたつもりの
+  # handler が、実は App 鍵で取っていた、を作らないため。
+  [ -n "${GH_ENTERPRISE_TOKEN:-}" ] || { echo "parts: GH_HOST is set but GH_ENTERPRISE_TOKEN is empty" >&2; exit 1; }
+  # 末尾改行等が混じると gateway 側は全部 401 を返し「鍵が違う」と区別が付かない。ここで弾く。
+  case "$GH_ENTERPRISE_TOKEN" in
+    *[!A-Za-z0-9._-]* ) echo "parts: GH_ENTERPRISE_TOKEN has unexpected characters" >&2; exit 1 ;;
+  esac
+  host="$GH_HOST"
+  # `token ` の形で送る。Envoy の apiKeyAuth が剥がすのは `Bearer ` だけで、こちらは
+  # 文字列そのものが照合対象になる（gateway 側は `token <値>` で持っている）。
+  GIT_CONFIG_VALUE_0="Authorization: token ${GH_ENTERPRISE_TOKEN}"
+fi
+export GIT_CONFIG_KEY_0="http.https://${host}/.extraheader"
 export GIT_CONFIG_VALUE_0
-unset token
 export GIT_TERMINAL_PROMPT=0
 
 # --- 取得 -----------------------------------------------------------------------------
@@ -95,7 +118,7 @@ for n in "${skills[@]}";    do paths+=("skills/$n"); done
 for n in "${agents[@]}";    do paths+=("agents/$n.md"); done
 for n in "${claude_md[@]}"; do paths+=("claude-md/$n.md"); done
 
-git clone --quiet --filter=blob:none --no-checkout --depth 1 "https://github.com/${PARTS_REPO}.git" "$work/src"
+git clone --quiet --filter=blob:none --no-checkout --depth 1 "https://${host}/${PARTS_REPO}.git" "$work/src"
 git -C "$work/src" sparse-checkout set --no-cone "${paths[@]}"
 git -C "$work/src" fetch --quiet --depth 1 origin "$PARTS_REF"
 git -C "$work/src" checkout --quiet "$PARTS_REF"
