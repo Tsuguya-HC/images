@@ -116,7 +116,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 ENV PATH="/usr/local/share/pnpm:/usr/local/cargo/bin:/usr/local/go/bin:${PATH}"
 
 # parts — handler の initContainer が部品（skill / agent / CLAUDE.md 断片）を parts リポから
-# 引いて敷くコマンド。中身は git の sparse checkout と GitHub App の token 生成だけ。
+# 引いて敷くコマンド。中身は git の sparse checkout と、gateway 経由または GitHub App の token での認証だけ。
 COPY --chmod=0755 parts /usr/local/bin/parts
 
 # github-signed-commit.sh — 署名付きコミットを GitHub API で作る。handler は GitHub の
