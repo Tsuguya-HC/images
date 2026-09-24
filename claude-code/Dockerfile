@@ -20,7 +20,7 @@ FROM python:3.14-slim-trixie@sha256:caaf356f40667c496d405780745b9ac25771c189a51d
 # ツールを足したら claude-code/smoke-test.sh の check も足すこと（対で手動維持）。
 
 # renovate: datasource=github-releases depName=cli/cli extractVersion=^v(?<version>.*)$
-ARG GH_VERSION=2.100.0
+ARG GH_VERSION=2.101.0
 # renovate: datasource=github-releases depName=spinframework/spin extractVersion=^v(?<version>.*)$
 ARG SPIN_VERSION=4.1.0
 # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
@@ -28,9 +28,9 @@ ARG KUBECTL_VERSION=1.37.0
 # renovate: datasource=github-releases depName=helm/helm extractVersion=^v(?<version>.*)$
 ARG HELM_VERSION=4.3.0
 # renovate: datasource=github-releases depName=grafana/loki extractVersion=^v(?<version>.*)$
-ARG LOGCLI_VERSION=3.7.7
+ARG LOGCLI_VERSION=3.7.8
 # renovate: datasource=golang-version depName=go extractVersion=^v?(?<version>.*)$
-ARG GO_VERSION=1.26.0
+ARG GO_VERSION=1.27.1
 # renovate: datasource=node-version depName=node extractVersion=^v?(?<version>.*)$
 ARG NODE_VERSION=24.21.0
 # renovate: datasource=pypi depName=PyYAML extractVersion=^(?<version>.*)$
