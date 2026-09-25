@@ -36,6 +36,11 @@ check "cargo --version" cargo --version
 check "rustc --version" rustc --version
 check "python3 --version" python3 --version
 check "pip --version" pip --version
+check "psql --version" psql --version
+# PG_MAJOR は Dockerfile の ARG PG_MAJOR を ENV で持ち出した値（二重管理を避ける）。
+# 空だと grep のパターンが " \." になり実質何にもマッチしないため、その場合は
+# 先に -n で落として真空成立を防ぐ。
+check "psql is major \${PG_MAJOR}" sh -c '[ -n "${PG_MAJOR:-}" ] && psql --version | grep -q " ${PG_MAJOR}\."'
 check "jq --version" jq --version
 check "git --version" git --version
 check "rg --version" rg --version
