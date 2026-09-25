@@ -59,6 +59,27 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
     # setuid/setgid 経路を使わない。apt が入れた分も含めて権限ビットを落とす。
     && find / -xdev \( -perm -4000 -o -perm -2000 \) -type f -exec chmod u-s,g-s {} +
 
+# psql は調査の handler が SQL をその場で実測するのに要る。メジャーはクラスタの PostgreSQL に
+# 揃える（違う版の psql で測ると構文とメタコマンドの出力がずれる）。Debian の apt は 17 までなので
+# PGDG から入れる。鍵はハッシュで固定し、差し替わったらビルドを止める（鍵の指紋 B97B0AFCAA1A47F0
+# 44F244A07FCC7D46ACCC4CF8 を確かめてからハッシュを更新する）。
+# PG_MAJOR / PGDG_KEY_SHA256 は Renovate の対象外: メジャーはクラスタの PostgreSQL と
+# 一緒に手動で上げる（上のコメント参照）ので、自動追跡すると psql だけ先行してずれる。
+ARG PG_MAJOR=18
+# smoke-test.sh が Dockerfile と二重管理せず照合できるよう、ビルド後も参照できる値にする。
+ENV PG_MAJOR=${PG_MAJOR}
+ARG PGDG_KEY_SHA256=0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76
+# hadolint ignore=DL3008
+RUN install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && echo "${PGDG_KEY_SHA256}  /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc" | sha256sum -c - \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
+      > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends "postgresql-client-${PG_MAJOR}" \
+    && rm -rf /var/lib/apt/lists/* \
+    && find / -xdev \( -perm -4000 -o -perm -2000 \) -type f -exec chmod u-s,g-s {} +
+
 RUN curl -fsSL https://claude.ai/install.sh | bash \
     && cp /root/.local/share/claude/versions/* /usr/local/bin/claude \
     && chmod +x /usr/local/bin/claude \
