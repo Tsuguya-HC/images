@@ -21,8 +21,16 @@ FROM python:3.14-slim-trixie@sha256:caaf356f40667c496d405780745b9ac25771c189a51d
 
 # renovate: datasource=github-releases depName=cli/cli extractVersion=^v(?<version>.*)$
 ARG GH_VERSION=2.101.0
+# Spin はクラスタのノード（containerd-shim-spin）が動かせる版が天井。新しい CLI は、ノードが
+# 拒否する component でもビルドと e2e を緑にする。home-rss のリリースと同じ版に揃え、
+# minor 以上の更新は renovate.jsonc で承認必須にしてある。
 # renovate: datasource=github-releases depName=spinframework/spin extractVersion=^v(?<version>.*)$
-ARG SPIN_VERSION=4.1.0
+ARG SPIN_VERSION=4.0.2
+# dbmate は対象リポの e2e がマイグレーションを当てるのに使う。リリースに checksum が無いので
+# バイナリのハッシュを固定しており、版を上げるときはハッシュも一緒に上げる。
+# renovate: datasource=github-releases depName=amacneil/dbmate extractVersion=^v(?<version>.*)$
+ARG DBMATE_VERSION=2.36.0
+ARG DBMATE_SHA256=47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce
 # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
 ARG KUBECTL_VERSION=1.37.0
 # renovate: datasource=github-releases depName=helm/helm extractVersion=^v(?<version>.*)$
@@ -114,7 +122,9 @@ RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_$
     && tar xzf /tmp/helm.tar.gz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin/ \
     && curl -fsSL "https://github.com/grafana/loki/releases/download/v${LOGCLI_VERSION}/logcli-linux-amd64.zip" -o /tmp/logcli.zip \
     && unzip -o /tmp/logcli.zip -d /tmp && mv /tmp/logcli-linux-amd64 /usr/local/bin/logcli \
-    && chmod +x /usr/local/bin/gh /usr/local/bin/spin /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/logcli \
+    && curl -fsSL "https://github.com/amacneil/dbmate/releases/download/v${DBMATE_VERSION}/dbmate-linux-amd64" -o /usr/local/bin/dbmate \
+    && echo "${DBMATE_SHA256}  /usr/local/bin/dbmate" | sha256sum -c - \
+    && chmod +x /usr/local/bin/gh /usr/local/bin/spin /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/logcli /usr/local/bin/dbmate \
     && rm -rf /tmp/*
 
 # Go は Go を要求するリポジトリをレビューするために要る。ツールチェーン本体だけを置き、
