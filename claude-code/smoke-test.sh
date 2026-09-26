@@ -25,6 +25,7 @@ check() {
 check "claude --version" claude --version
 check "gh --version" gh --version
 check "spin --version" spin --version
+check "dbmate --version" dbmate --version
 check "kubectl version --client" kubectl version --client
 check "helm version" helm version
 check "logcli --version" logcli --version

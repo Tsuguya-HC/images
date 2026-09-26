@@ -54,6 +54,29 @@
   "packageRules": [
     {
       "description": [
+        "The Spin CLI is capped by the cluster nodes: containerd-shim-spin links an",
+        "older Spin, and a newer CLI builds and runs components the nodes refuse.",
+        "home-rss's e2e refuses any CLI other than its release's, so the image has",
+        "to carry the same one. Lift this when the shim ships a newer Spin."
+      ],
+      "matchPackageNames": ["spinframework/spin"],
+      "matchUpdateTypes": ["major", "minor"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": [
+        "DBMATE_SHA256 in the Dockerfile isn't tracked by the customManager —",
+        "only DBMATE_VERSION is. dbmate's releases don't publish a checksum, so",
+        "the hash has to be updated by hand alongside the version; an automerged",
+        "version bump alone leaves the hash mismatched and the build fails.",
+        "Held for every update, not just major/minor, since minor/patch would",
+        "otherwise fall into the automerged 'all non-major updates' group below."
+      ],
+      "matchPackageNames": ["amacneil/dbmate"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": [
         "First-party code does not soak. minimumReleaseAge buys time for someone",
         "else to notice a poisoned release before we take it; there is no someone",
         "else here — we wrote it, reviewed it and merged it. Waiting three days on",
