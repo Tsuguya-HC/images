@@ -95,6 +95,7 @@ RUN curl -fsSL https://claude.ai/install.sh | bash \
 
 RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
     && sh /tmp/rustup-init.sh -y --no-modify-path --default-toolchain stable --profile minimal --target wasm32-wasip1 \
+        --component rustfmt --component clippy \
     && cp -a /root/.cargo /usr/local/cargo \
     && cp -a /root/.rustup /usr/local/rustup \
     && rm -rf /root/.cargo /root/.rustup /tmp/rustup-init.sh

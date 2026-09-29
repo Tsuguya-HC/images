@@ -35,6 +35,8 @@ check "npm --version" npm --version
 check "pnpm --version" pnpm --version
 check "cargo --version" cargo --version
 check "rustc --version" rustc --version
+check "cargo fmt --version" cargo fmt --version
+check "cargo clippy --version" cargo clippy --version
 check "python3 --version" python3 --version
 check "pip --version" pip --version
 check "psql --version" psql --version
