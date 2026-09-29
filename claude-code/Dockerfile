@@ -31,6 +31,13 @@ ARG SPIN_VERSION=4.0.2
 # renovate: datasource=github-releases depName=amacneil/dbmate extractVersion=^v(?<version>.*)$
 ARG DBMATE_VERSION=2.36.0
 ARG DBMATE_SHA256=47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780ce
+# opencode は OpenRouter 経由の非 Claude モデルを動かすハーネスの候補（Claude Code と比べる）。
+# リリースに checksum ファイルが無いので tarball のハッシュを固定しており、版を上げるときは
+# ハッシュも一緒に上げる。リリースは immutable なので、上げるハッシュは
+# `gh release verify-asset v<版> opencode-linux-x64.tar.gz -R anomalyco/opencode` で確かめる。
+# renovate: datasource=github-releases depName=anomalyco/opencode extractVersion=^v(?<version>.*)$
+ARG OPENCODE_VERSION=1.18.33
+ARG OPENCODE_SHA256=e546123213ae47909a4268692aa4b94950d011afe9cac9938753a2194f1c16d5
 # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
 ARG KUBECTL_VERSION=1.37.0
 # renovate: datasource=github-releases depName=helm/helm extractVersion=^v(?<version>.*)$
@@ -125,7 +132,10 @@ RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_$
     && unzip -o /tmp/logcli.zip -d /tmp && mv /tmp/logcli-linux-amd64 /usr/local/bin/logcli \
     && curl -fsSL "https://github.com/amacneil/dbmate/releases/download/v${DBMATE_VERSION}/dbmate-linux-amd64" -o /usr/local/bin/dbmate \
     && echo "${DBMATE_SHA256}  /usr/local/bin/dbmate" | sha256sum -c - \
-    && chmod +x /usr/local/bin/gh /usr/local/bin/spin /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/logcli /usr/local/bin/dbmate \
+    && curl -fsSL "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" -o /tmp/opencode.tar.gz \
+    && echo "${OPENCODE_SHA256}  /tmp/opencode.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/opencode.tar.gz -C /usr/local/bin opencode \
+    && chmod +x /usr/local/bin/gh /usr/local/bin/spin /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/logcli /usr/local/bin/dbmate /usr/local/bin/opencode \
     && rm -rf /tmp/*
 
 # Go は Go を要求するリポジトリをレビューするために要る。ツールチェーン本体だけを置き、

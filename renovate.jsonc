@@ -65,14 +65,14 @@
     },
     {
       "description": [
-        "DBMATE_SHA256 in the Dockerfile isn't tracked by the customManager —",
-        "only DBMATE_VERSION is. dbmate's releases don't publish a checksum, so",
-        "the hash has to be updated by hand alongside the version; an automerged",
-        "version bump alone leaves the hash mismatched and the build fails.",
+        "DBMATE_SHA256 and OPENCODE_SHA256 in the Dockerfile aren't tracked by the",
+        "customManager — only the _VERSION ARGs are. Neither release publishes a",
+        "checksum file, so the hash has to be updated by hand alongside the version;",
+        "an automerged version bump alone leaves the hash mismatched and the build fails.",
         "Held for every update, not just major/minor, since minor/patch would",
         "otherwise fall into the automerged 'all non-major updates' group below."
       ],
-      "matchPackageNames": ["amacneil/dbmate"],
+      "matchPackageNames": ["amacneil/dbmate", "anomalyco/opencode"],
       "dependencyDashboardApproval": true
     },
     {

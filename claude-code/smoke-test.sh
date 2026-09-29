@@ -23,6 +23,7 @@ check() {
 }
 
 check "claude --version" claude --version
+check "opencode --version" opencode --version
 check "gh --version" gh --version
 check "spin --version" spin --version
 check "dbmate --version" dbmate --version
