@@ -23,6 +23,8 @@ check() {
 }
 
 check "claude --version" claude --version
+# opencode は起動時に $HOME の下へ書く。-u だけで起動すると HOME が書けない / になり落ちる。
+check "opencode --version" env HOME="$(mktemp -d)" opencode --version
 check "gh --version" gh --version
 check "spin --version" spin --version
 check "dbmate --version" dbmate --version
