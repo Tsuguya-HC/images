@@ -25,6 +25,9 @@ check() {
 check "claude --version" claude --version
 # opencode は起動時に $HOME の下へ書く。-u だけで起動すると HOME が書けない / になり落ちる。
 check "opencode --version" env HOME="$(mktemp -d)" opencode --version
+check "cargo llvm-cov --version" cargo llvm-cov --version
+# --version は llvm-tools が無くても通るので、実体（llvm-profdata / llvm-cov）の存在を別に見る。
+check "llvm-tools (llvm-profdata, llvm-cov) installed" sh -c 'ls "${RUSTUP_HOME}"/toolchains/*/lib/rustlib/*/bin/llvm-profdata "${RUSTUP_HOME}"/toolchains/*/lib/rustlib/*/bin/llvm-cov'
 check "gh --version" gh --version
 check "spin --version" spin --version
 check "dbmate --version" dbmate --version
