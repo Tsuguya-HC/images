@@ -58,6 +58,7 @@ jobs:
       docker: ${{ steps.filter.outputs.docker }}
       workflows: ${{ steps.filter.outputs.workflows }}
       renovate: ${{ steps.filter.outputs.renovate }}
+      aqua: ${{ steps.filter.outputs.aqua }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,13 +73,17 @@ jobs:
               - '.hadolint.yaml'
               - '.github/workflows/_hadolint.yml'
               - '.github/workflows/_claude-code-smoke.yml'
-              - 'claude-code/smoke-test.sh'
               - 'claude-code/**'
+              - 'aqua.yaml'
+              - 'aqua-checksums.json'
             workflows:
               - '.github/workflows/**'
               - '.github/zizmor.yml'
             renovate:
               - 'renovate.json*'
+            aqua:
+              - 'aqua.yaml'
+              - 'aqua-checksums.json'
 
   hadolint:
     needs: detect
@@ -103,8 +108,8 @@ jobs:
       contents: read
 
   # ワークフロー自身の検査。actionlint と zizmor のピンは home-actions 側にあり、
-  # ここは呼び先の SHA を追うだけ。aqua.yaml は要らない（共有ワークフローが
-  # AQUA_CONFIG で自分の _tooling/aqua.yaml を使う）。
+  # ここは呼び先の SHA を追うだけ。共有ワークフローはこのリポの
+  # aqua.yaml を読まず、AQUA_CONFIG で自分の _tooling/aqua.yaml を使う。
   lint-workflows:
     needs: detect
     if: ${{ needs.detect.outputs.workflows == 'true' }}
@@ -121,6 +126,14 @@ jobs:
     permissions:
       contents: read
 
+  # aqua-checksums.json が aqua.yaml と一致しているか。
+  lint-aqua:
+    needs: detect
+    if: ${{ needs.detect.outputs.aqua == 'true' }}
+    uses: Tsuguya-HC/home-actions/.github/workflows/lint-aqua.yml@e104faf579d998450923e65f0d47a4ef790b8abd # v1.3.0
+    permissions:
+      contents: read
+
   # 必須チェックはこれ 1 個だけを ruleset に登録する。個別ジョブ名を必須化すると、
   # 名前を変えた瞬間に報告されない必須コンテキストが残って PR が永久に止まる。
   #
@@ -129,7 +142,7 @@ jobs:
   # 緑」が必須チェックを満たしてしまう。
   gate:
     name: CI Gate
-    needs: [detect, lint-workflows, lint-renovate, hadolint, claude-code-smoke]
+    needs: [detect, lint-workflows, lint-renovate, lint-aqua, hadolint, claude-code-smoke]
     # `always()` ではなく `!cancelled()`。always() だと run をキャンセルしたとき
     # 全ての leaf が `cancelled` を返し、下の case をすり抜けて必須チェックが
     # 失敗として記録される。

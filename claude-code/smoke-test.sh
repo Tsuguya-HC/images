@@ -2,66 +2,12 @@
 # claude-code イメージのスモークテスト。docker build 後、非 root（65532:65532）で
 # `docker run --rm -u 65532:65532 <image> bash /path/to/this` として呼ぶ想定。
 #
-# この一覧は claude-code/Dockerfile の RUN ブロックと対で手動維持する。ツールを
-# 足したらここにも check を足すこと。
-#
-# 各ツールは存在確認（command -v）だけでは動的リンク破損を検出できないため、
-# 実際に --version / --help を実行する。1 項目でも落ちたら非ゼロで終わる。
+# ツールの有無と版、ファイルの有無は claude-code/structure-test.yaml が見る。ここに残すのは
+# 宣言的に書けない確認（失敗経路の stderr 照合、実コンパイル、ファイルシステムの走査）だけ。
+# 1 項目でも落ちたら非ゼロで終わる。
 set -euo pipefail
 
 fail=0
-
-check() {
-  local desc="$1"
-  shift
-  if "$@" >/dev/null 2>&1; then
-    echo "ok: ${desc}"
-  else
-    echo "FAIL: ${desc}" >&2
-    fail=1
-  fi
-}
-
-check "claude --version" claude --version
-# opencode は起動時に $HOME の下へ書く。-u だけで起動すると HOME が書けない / になり落ちる。
-check "opencode --version" env HOME="$(mktemp -d)" opencode --version
-check "cargo llvm-cov --version" cargo llvm-cov --version
-# --version は llvm-tools が無くても通るので、実体（llvm-profdata / llvm-cov）の存在を別に見る。
-check "llvm-tools (llvm-profdata, llvm-cov) installed" sh -c 'ls "${RUSTUP_HOME}"/toolchains/*/lib/rustlib/*/bin/llvm-profdata "${RUSTUP_HOME}"/toolchains/*/lib/rustlib/*/bin/llvm-cov'
-check "gh --version" gh --version
-check "spin --version" spin --version
-check "dbmate --version" dbmate --version
-check "kubectl version --client" kubectl version --client
-check "helm version" helm version
-check "logcli --version" logcli --version
-check "go version" go version
-check "node --version" node --version
-check "npm --version" npm --version
-check "pnpm --version" pnpm --version
-check "cargo --version" cargo --version
-check "rustc --version" rustc --version
-check "cargo fmt --version" cargo fmt --version
-check "cargo clippy --version" cargo clippy --version
-check "python3 --version" python3 --version
-check "pip --version" pip --version
-check "psql --version" psql --version
-# PG_MAJOR は Dockerfile の ARG PG_MAJOR を ENV で持ち出した値（二重管理を避ける）。
-# 空だと grep のパターンが " \." になり実質何にもマッチしないため、その場合は
-# 先に -n で落として真空成立を防ぐ。
-check "psql is major \${PG_MAJOR}" sh -c '[ -n "${PG_MAJOR:-}" ] && psql --version | grep -q " ${PG_MAJOR}\."'
-check "jq --version" jq --version
-check "git --version" git --version
-check "rg --version" rg --version
-check "make --version" make --version
-check "setpriv --help" setpriv --help
-check "mkfs.ext4 -V" mkfs.ext4 -V
-check "curl --version" curl --version
-check "openssl version" openssl version
-check "unzip -v" unzip -v
-check "xz --version" xz --version
-# argo-tools のビルドから COPY --from で取り出しているので、digest を上げ損ねたり
-# パスが変わったりすると黙って消える。--version は無いので実行ビットで見る。
-check "github-signed-commit.sh is executable" test -x /usr/local/bin/github-signed-commit.sh
 
 # parts の失敗経路（ネットワークに出ずに完結する範囲）。exit code だけでなく stderr の
 # 文言も照合する — ガードを削っても後段の mkdir -p "$PARTS_OUT"（既定 /parts、非 root
@@ -118,38 +64,6 @@ else
   fail=1
 fi
 rm -f "${cc_probe}"
-
-# 非 root（USER 65532）で動いていること
-if [ "$(id -u)" = "65532" ]; then
-  echo "ok: uid is 65532"
-else
-  echo "FAIL: running as uid $(id -u), expected 65532" >&2
-  fail=1
-fi
-
-# rust の wasm32-wasip1 ターゲット
-if rustup target list --installed | grep -qx wasm32-wasip1; then
-  echo "ok: wasm32-wasip1 target installed"
-else
-  echo "FAIL: wasm32-wasip1 target missing" >&2
-  fail=1
-fi
-
-# setpriv --reuid（util-linux 版であること）
-if setpriv --help 2>&1 | grep -q -- '--reuid'; then
-  echo "ok: setpriv has --reuid"
-else
-  echo "FAIL: setpriv missing --reuid" >&2
-  fail=1
-fi
-
-# PyYAML が import できること
-if python3 -c "import yaml" >/dev/null 2>&1; then
-  echo "ok: python3 can import yaml"
-else
-  echo "FAIL: python3 cannot import yaml" >&2
-  fail=1
-fi
 
 # setuid/setgid ファイルの簡易チェック（回帰検出の補助）。非 root（65532）では
 # /root のような root 専有ディレクトリを走査できず Permission denied で find が

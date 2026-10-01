@@ -38,6 +38,15 @@ jobs:
       - name: docker build
         run: docker build -t claude-code-smoke:ci claude-code/
 
+      - uses: aquaproj/aqua-installer@96a9bc20066c5bf5e275b41019cfc165b25f4e2e # v4.0.5
+        with:
+          aqua_version: v2.63.0
+          # 既定の -l はリンクだけで、実体は後段の run で未認証で取りに行く。GITHUB_TOKEN のあるここで取る。
+          aqua_opts: ""
+
+      - name: structure test
+        run: container-structure-test test --image claude-code-smoke:ci --config claude-code/structure-test.yaml
+
       - name: smoke test (non-root)
         run: |
           docker run --rm -u 65532:65532 \

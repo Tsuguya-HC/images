@@ -1,0 +1,165 @@
+schemaVersion: 2.0.0
+
+# claude-code イメージの構造テスト（container-structure-test）。イメージの USER（65532）で走る。
+# 版を固定しているツールは expectedOutput に同じ版を書く。直前の `# renovate:` 注記で
+# Dockerfile の ARG と同じ PR で上がるので、片方だけ上がることはない。
+
+metadataTest:
+  user: "65532:65532"
+  envVars:
+    - key: RUSTUP_HOME
+      value: /usr/local/rustup
+    - key: CARGO_HOME
+      value: /usr/local/cargo
+
+fileExistenceTests:
+  # argo-tools から COPY で取り出している。--version が無いので実行ビットで見る。
+  - name: github-signed-commit.sh
+    path: /usr/local/bin/github-signed-commit.sh
+    shouldExist: true
+    permissions: "-rwxr-xr-x"
+  # cargo llvm-cov --version は llvm-tools が無くても通るので、実体を見る。
+  - name: llvm-profdata
+    path: /usr/local/rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-profdata
+    shouldExist: true
+  - name: llvm-cov
+    path: /usr/local/rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-cov
+    shouldExist: true
+
+commandTests:
+  # --- 版を固定しているツール ---
+  - name: gh
+    command: gh
+    args: [--version]
+    # renovate: datasource=github-releases depName=cli/cli extractVersion=^v(?<version>.*)$
+    expectedOutput: ["gh version 2.101.0 "]
+  - name: spin
+    command: spin
+    args: [--version]
+    # renovate: datasource=github-releases depName=spinframework/spin extractVersion=^v(?<version>.*)$
+    expectedOutput: ["spin 4.0.2 "]
+  - name: dbmate
+    command: dbmate
+    args: [--version]
+    # renovate: datasource=github-releases depName=amacneil/dbmate extractVersion=^v(?<version>.*)$
+    expectedOutput: ["dbmate version 2.36.0\\b"]
+  # opencode は起動時に $HOME の下へ書くので、書ける HOME を渡す。
+  - name: opencode
+    command: opencode
+    args: [--version]
+    envVars:
+      - key: HOME
+        value: /tmp
+    # renovate: datasource=github-releases depName=anomalyco/opencode extractVersion=^v(?<version>.*)$
+    expectedOutput: ["^1.18.33\\b"]
+  - name: cargo-llvm-cov
+    command: cargo
+    args: [llvm-cov, --version]
+    # renovate: datasource=github-releases depName=taiki-e/cargo-llvm-cov extractVersion=^v(?<version>.*)$
+    expectedOutput: ["cargo-llvm-cov 0.9.1\\b"]
+  - name: kubectl
+    command: kubectl
+    args: [version, --client]
+    # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
+    expectedOutput: ["Client Version: v1.37.0\\b"]
+  - name: helm
+    command: helm
+    args: [version, --short]
+    # renovate: datasource=github-releases depName=helm/helm extractVersion=^v(?<version>.*)$
+    expectedOutput: ["^v4.3.0[+]"]
+  - name: logcli
+    command: logcli
+    args: [--version]
+    # logcli は版を stderr に出す。
+    # renovate: datasource=github-releases depName=grafana/loki extractVersion=^v(?<version>.*)$
+    expectedError: ["logcli, version 3.7.8 "]
+  - name: go
+    command: go
+    args: [version]
+    # renovate: datasource=golang-version depName=go extractVersion=^v?(?<version>.*)$
+    expectedOutput: ["go version go1.27.1 "]
+  - name: node
+    command: node
+    args: [--version]
+    # renovate: datasource=node-version depName=node extractVersion=^v?(?<version>.*)$
+    expectedOutput: ["^v24.21.0\\b"]
+  - name: PyYAML
+    command: python3
+    args: [-c, "import yaml; print(yaml.__version__)"]
+    # renovate: datasource=pypi depName=PyYAML extractVersion=^(?<version>.*)$
+    expectedOutput: ["^6.0.3\\b"]
+  # PG_MAJOR は Renovate の対象外（クラスタの PostgreSQL と揃えて手で上げる）。ENV PG_MAJOR と照合する。
+  # CST は `${VAR}` を展開して空にするので、波括弧なしの `$PG_MAJOR` と書く。
+  - name: psql major
+    command: sh
+    args: ["-c", '[ -n "$PG_MAJOR" ] && psql --version | grep -q " $PG_MAJOR\\."']
+
+  # --- 版を固定していないツール（動くことだけ見る） ---
+  - name: claude
+    command: claude
+    args: [--version]
+    expectedOutput: ["Claude Code"]
+  - name: npm
+    command: npm
+    args: [--version]
+  - name: pnpm
+    command: pnpm
+    args: [--version]
+  - name: cargo
+    command: cargo
+    args: [--version]
+  - name: rustc
+    command: rustc
+    args: [--version]
+  - name: cargo fmt
+    command: cargo
+    args: [fmt, --version]
+  - name: cargo clippy
+    command: cargo
+    args: [clippy, --version]
+  - name: wasm32-wasip1 target
+    command: rustup
+    args: [target, list, --installed]
+    expectedOutput: ["(?m)^wasm32-wasip1$"]
+  - name: python3
+    command: python3
+    args: [--version]
+  - name: pip
+    command: pip
+    args: [--version]
+  - name: jq
+    command: jq
+    args: [--version]
+  - name: git
+    command: git
+    args: [--version]
+  - name: rg
+    command: rg
+    args: [--version]
+  - name: make
+    command: make
+    args: [--version]
+  # util-linux の setpriv（--reuid を持つ）であること。
+  - name: setpriv
+    command: setpriv
+    args: [--help]
+    expectedOutput: ["--reuid"]
+  - name: mkfs.ext4
+    command: mkfs.ext4
+    args: [-V]
+  - name: curl
+    command: curl
+    args: [--version]
+  - name: openssl
+    command: openssl
+    args: [version]
+  - name: unzip
+    command: unzip
+    args: [-v]
+  - name: xz
+    command: xz
+    args: [--version]
+  - name: uid
+    command: id
+    args: [-u]
+    expectedOutput: ["(?m)^65532$"]
