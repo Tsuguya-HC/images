@@ -38,6 +38,13 @@ ARG DBMATE_SHA256=47e284b3d8cbad1ba5f090495aa05afd1bbd5f35e2ed5577aad06da74ce780
 # renovate: datasource=github-releases depName=anomalyco/opencode extractVersion=^v(?<version>.*)$
 ARG OPENCODE_VERSION=1.18.33
 ARG OPENCODE_SHA256=e546123213ae47909a4268692aa4b94950d011afe9cac9938753a2194f1c16d5
+# cargo-llvm-cov は変更行のカバレッジ計測に使う。リリースに checksum ファイルが無いので
+# tarball のハッシュを固定しており、版を上げるときはハッシュも一緒に上げる。リリースは
+# immutable なので、上げるハッシュは
+# `gh release verify-asset v<版> cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz -R taiki-e/cargo-llvm-cov` で確かめる。
+# renovate: datasource=github-releases depName=taiki-e/cargo-llvm-cov extractVersion=^v(?<version>.*)$
+ARG CARGO_LLVM_COV_VERSION=0.9.1
+ARG CARGO_LLVM_COV_SHA256=b3f68e625481fed9b16444174f3fa5ebcdbde4a1878803a35eabe2dcefcdc41a
 # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
 ARG KUBECTL_VERSION=1.37.0
 # renovate: datasource=github-releases depName=helm/helm extractVersion=^v(?<version>.*)$
@@ -102,7 +109,7 @@ RUN curl -fsSL https://claude.ai/install.sh | bash \
 
 RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
     && sh /tmp/rustup-init.sh -y --no-modify-path --default-toolchain stable --profile minimal --target wasm32-wasip1 \
-        --component rustfmt --component clippy \
+        --component rustfmt --component clippy --component llvm-tools \
     && cp -a /root/.cargo /usr/local/cargo \
     && cp -a /root/.rustup /usr/local/rustup \
     && rm -rf /root/.cargo /root/.rustup /tmp/rustup-init.sh
@@ -135,7 +142,10 @@ RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_$
     && curl -fsSL "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" -o /tmp/opencode.tar.gz \
     && echo "${OPENCODE_SHA256}  /tmp/opencode.tar.gz" | sha256sum -c - \
     && tar xzf /tmp/opencode.tar.gz -C /usr/local/bin opencode \
-    && chmod +x /usr/local/bin/gh /usr/local/bin/spin /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/logcli /usr/local/bin/dbmate /usr/local/bin/opencode \
+    && curl -fsSL "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v${CARGO_LLVM_COV_VERSION}/cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz" -o /tmp/cargo-llvm-cov.tar.gz \
+    && echo "${CARGO_LLVM_COV_SHA256}  /tmp/cargo-llvm-cov.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/cargo-llvm-cov.tar.gz -C /usr/local/bin cargo-llvm-cov \
+    && chmod +x /usr/local/bin/gh /usr/local/bin/spin /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/logcli /usr/local/bin/dbmate /usr/local/bin/opencode /usr/local/bin/cargo-llvm-cov \
     && rm -rf /tmp/*
 
 # Go は Go を要求するリポジトリをレビューするために要る。ツールチェーン本体だけを置き、

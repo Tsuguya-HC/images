@@ -65,14 +65,14 @@
     },
     {
       "description": [
-        "DBMATE_SHA256 and OPENCODE_SHA256 in the Dockerfile aren't tracked by the",
-        "customManager — only the _VERSION ARGs are. Neither release publishes a",
+        "DBMATE_SHA256, OPENCODE_SHA256 and CARGO_LLVM_COV_SHA256 in the Dockerfile aren't",
+        "tracked by the customManager — only the _VERSION ARGs are. None of these releases publishes a",
         "checksum file, so the hash has to be updated by hand alongside the version;",
         "an automerged version bump alone leaves the hash mismatched and the build fails.",
         "Held for every update, not just major/minor, since minor/patch would",
         "otherwise fall into the automerged 'all non-major updates' group below."
       ],
-      "matchPackageNames": ["amacneil/dbmate", "anomalyco/opencode"],
+      "matchPackageNames": ["amacneil/dbmate", "anomalyco/opencode", "taiki-e/cargo-llvm-cov"],
       "dependencyDashboardApproval": true
     },
     {
