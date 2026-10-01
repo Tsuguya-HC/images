@@ -17,7 +17,8 @@
 # 見た上で、renovate.jsonc の packageRules で automerge を制御すること。
 FROM python:3.14-slim-trixie@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2
 
-# ツールを足したら claude-code/smoke-test.sh の check も足すこと（対で手動維持）。
+# ツールを足したら claude-code/structure-test.yaml にもテストを足すこと（対で手動維持）。版を固定した
+# ツールは、同じ `# renovate:` 注記を付けて expectedOutput に版を書く。
 
 # renovate: datasource=github-releases depName=cli/cli extractVersion=^v(?<version>.*)$
 ARG GH_VERSION=2.101.0
@@ -88,7 +89,7 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
 # PG_MAJOR / PGDG_KEY_SHA256 は Renovate の対象外: メジャーはクラスタの PostgreSQL と
 # 一緒に手動で上げる（上のコメント参照）ので、自動追跡すると psql だけ先行してずれる。
 ARG PG_MAJOR=18
-# smoke-test.sh が Dockerfile と二重管理せず照合できるよう、ビルド後も参照できる値にする。
+# structure-test.yaml が Dockerfile と二重管理せず照合できるよう、ビルド後も参照できる値にする。
 ENV PG_MAJOR=${PG_MAJOR}
 ARG PGDG_KEY_SHA256=0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76
 # hadolint ignore=DL3008

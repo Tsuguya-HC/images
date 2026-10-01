@@ -6,15 +6,24 @@
   "rebaseWhen": "behind-base-branch",
 
 
-  // No aqua preset: this repo has no aqua.yaml. The tools it pins are the ones it
-  // bakes into the images, not ones it runs in CI.
+  // The aqua preset is pinned rather than floating: it owns which files the aqua
+  // manager reads, and a preset-side change would silently re-scope this repo.
   "extends": [
     // config:best-practices = config:recommended + docker:pinDigests
     // + helpers:pinGitHubActionDigests + :configMigration + :pinDevDependencies
     // + abandonments:recommended + security:minimumReleaseAgeNpm
     // + :maintainLockFilesWeekly. The two presets listed separately before are
     // both inside it now.
-    "config:best-practices"
+    "config:best-practices",
+    "github>aquaproj/aqua-renovate-config#2.13.0"
+  ],
+
+  // The aqua-checksum workflow commits checksum fixes onto Renovate's branches as
+  // the tgy-cluster-bot App; Renovate stops updating a branch it thinks a human
+  // took over, so those commits must not count as edits.
+  "gitIgnoredAuthors": [
+    "265309552+tsuguya-home-cluster[bot]@users.noreply.github.com",
+    "noreply@github.com"
   ],
 
   // These images are rebuilt and pushed on merge, and every cluster workload that
@@ -47,6 +56,17 @@
       "managerFilePatterns": ["/(^|/)Dockerfile$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) extractVersion=(?<extractVersion>\\S+)\\s*\\nARG \\w+_VERSION=(?<currentValue>\\S+)"
+      ]
+    },
+    {
+      "description": [
+        "The structure test repeats the pinned versions in expectedOutput/expectedError",
+        "under the same annotation as the Dockerfile ARG, so both move in one PR."
+      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)structure-test\\.yaml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) extractVersion=(?<extractVersion>\\S+)\\s*\\n\\s*expected(?:Output|Error): \\[\"[^\"]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ]
     }
   ],
