@@ -103,10 +103,17 @@ RUN install -d /usr/share/postgresql-common/pgdg \
     && rm -rf /var/lib/apt/lists/* \
     && find / -xdev \( -perm -4000 -o -perm -2000 \) -type f -exec chmod u-s,g-s {} +
 
-RUN curl -fsSL https://claude.ai/install.sh | bash \
-    && cp /root/.local/share/claude/versions/* /usr/local/bin/claude \
+# claude は版を固定する。途中で HTTP 400 になって止まる版があったので、新しい版は
+# llm-gateway 経由の OpenRouter のモデルで implement が最後まで通ると確かめてから上げる
+# （更新は renovate.jsonc で承認必須にしてある）。
+# renovate: datasource=npm depName=@anthropic-ai/claude-code extractVersion=^(?<version>.*)$
+ARG CLAUDE_CODE_VERSION=2.1.286
+RUN curl -fsSL https://claude.ai/install.sh | bash -s "${CLAUDE_CODE_VERSION}" \
+    && cp "/root/.local/share/claude/versions/${CLAUDE_CODE_VERSION}" /usr/local/bin/claude \
     && chmod +x /usr/local/bin/claude \
     && rm -rf /root/.local
+# 固定した版を実行時に入れ替えさせない。
+ENV DISABLE_AUTOUPDATER=1
 
 RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
     && sh /tmp/rustup-init.sh -y --no-modify-path --default-toolchain stable --profile minimal --target wasm32-wasip1 \
