@@ -11,6 +11,8 @@ metadataTest:
       value: /usr/local/rustup
     - key: CARGO_HOME
       value: /usr/local/cargo
+    - key: DISABLE_AUTOUPDATER
+      value: "1"
 
 fileExistenceTests:
   # argo-tools から COPY で取り出している。--version が無いので実行ビットで見る。
@@ -94,11 +96,13 @@ commandTests:
     command: sh
     args: ["-c", '[ -n "$PG_MAJOR" ] && psql --version | grep -q " $PG_MAJOR\\."']
 
-  # --- 版を固定していないツール（動くことだけ見る） ---
   - name: claude
     command: claude
     args: [--version]
-    expectedOutput: ["Claude Code"]
+    # renovate: datasource=npm depName=@anthropic-ai/claude-code extractVersion=^(?<version>.*)$
+    expectedOutput: ["^2.1.286 \\(Claude Code\\)"]
+
+  # --- 版を固定していないツール（動くことだけ見る） ---
   - name: npm
     command: npm
     args: [--version]

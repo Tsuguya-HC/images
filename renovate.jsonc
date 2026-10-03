@@ -97,6 +97,15 @@
     },
     {
       "description": [
+        "Claude Code 2.1.288 got HTTP 400 \"The requested model was not found\" from",
+        "OpenRouter through llm-gateway partway through implement runs; 2.1.286 never did.",
+        "Held for every update until a newer version is shown to work behind the gateway."
+      ],
+      "matchPackageNames": ["@anthropic-ai/claude-code"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": [
         "First-party code does not soak. minimumReleaseAge buys time for someone",
         "else to notice a poisoned release before we take it; there is no someone",
         "else here — we wrote it, reviewed it and merged it. Waiting three days on",
