@@ -52,7 +52,15 @@ if ! HEAD_SHA=$(gh api "repos/$REPO/git/ref/heads/$BRANCH" --jq '.object.sha' 2>
 fi
 BASE_TREE=$(gh api "repos/$REPO/git/commits/$HEAD_SHA" --jq '.tree.sha')
 
-TREE_ITEMS="[]"
+# File contents and the tree list go through files, not jq arguments: one
+# argument is capped at 128 KiB (MAX_ARG_STRLEN), so a larger file or a long
+# tree list would fail with "Argument list too long".
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+echo '[]' > "$WORK/tree.json"
 
 for file in $(git diff --cached --diff-filter=d --name-only); do
   if git diff --cached --summary "$file" | grep -q 'mode change.*100755'; then
@@ -63,28 +71,31 @@ for file in $(git diff --cached --diff-filter=d --name-only); do
     MODE="100644"
   fi
 
-  BLOB_SHA=$(jq -n --arg c "$(base64 < "$file" | tr -d '\n')" \
+  base64 < "$file" | tr -d '\n' > "$WORK/blob.b64"
+  BLOB_SHA=$(jq -n --rawfile c "$WORK/blob.b64" \
       '{content: $c, encoding: "base64"}' \
     | gh api -X POST "repos/$REPO/git/blobs" --input - --jq '.sha')
 
-  TREE_ITEMS=$(printf '%s' "$TREE_ITEMS" | jq \
-    --arg path "$file" --arg sha "$BLOB_SHA" --arg mode "$MODE" \
-    '. + [{"path": $path, "mode": $mode, "type": "blob", "sha": $sha}]')
+  jq --arg path "$file" --arg sha "$BLOB_SHA" --arg mode "$MODE" \
+    '. + [{"path": $path, "mode": $mode, "type": "blob", "sha": $sha}]' \
+    "$WORK/tree.json" > "$WORK/tree.next"
+  mv "$WORK/tree.next" "$WORK/tree.json"
 done
 
 for file in $(git diff --cached --diff-filter=D --name-only); do
-  TREE_ITEMS=$(printf '%s' "$TREE_ITEMS" | jq \
-    --arg path "$file" \
-    '. + [{"path": $path, "mode": "100644", "type": "blob", "sha": null}]')
+  jq --arg path "$file" \
+    '. + [{"path": $path, "mode": "100644", "type": "blob", "sha": null}]' \
+    "$WORK/tree.json" > "$WORK/tree.next"
+  mv "$WORK/tree.next" "$WORK/tree.json"
 done
 
-if [ "$TREE_ITEMS" = "[]" ]; then
+if [ "$(jq length "$WORK/tree.json")" -eq 0 ]; then
   echo "Error: No staged changes to commit" >&2
   exit 1
 fi
 
-TREE_SHA=$(jq -n --arg base "$BASE_TREE" --argjson tree "$TREE_ITEMS" \
-    '{base_tree: $base, tree: $tree}' \
+TREE_SHA=$(jq -n --arg base "$BASE_TREE" --slurpfile tree "$WORK/tree.json" \
+    '{base_tree: $base, tree: $tree[0]}' \
   | gh api -X POST "repos/$REPO/git/trees" --input - --jq '.sha')
 
 COMMIT_SHA=$(jq -n --arg msg "$MESSAGE" --arg tree "$TREE_SHA" --arg parent "$HEAD_SHA" \
