@@ -143,6 +143,10 @@ commandTests:
   - name: make
     command: make
     args: [--version]
+  # 長く走る handler の PID 1 に置き、親を失ったプロセスを刈り取らせる。
+  - name: tini
+    command: tini
+    args: [--version]
   # util-linux の setpriv（--reuid を持つ）であること。
   - name: setpriv
     command: setpriv
