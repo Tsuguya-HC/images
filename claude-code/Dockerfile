@@ -76,7 +76,7 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
     && apt-get install -y --no-install-recommends \
       curl git jq make openssl ripgrep unzip xz-utils \
       gcc libc6-dev \
-      e2fsprogs util-linux \
+      e2fsprogs util-linux tini \
     && rm -rf /var/lib/apt/lists/* \
     # このイメージは非 root（USER 65532）実行で、mount / su / passwd のような
     # setuid/setgid 経路を使わない。apt が入れた分も含めて権限ビットを落とす。
