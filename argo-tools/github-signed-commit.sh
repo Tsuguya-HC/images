@@ -62,16 +62,27 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 echo '[]' > "$WORK/tree.json"
 
-for file in $(git diff --cached --diff-filter=d --name-only); do
-  if git diff --cached --summary "$file" | grep -q 'mode change.*100755'; then
-    MODE="100755"
-  elif test -x "$file"; then
-    MODE="100755"
-  else
-    MODE="100644"
-  fi
+# Paths are read NUL-separated into a file, one per line. Plain --name-only
+# output quotes non-ASCII and '"' as "\346...", and a for loop over it splits
+# on spaces, so either kind of path made the script fail. A newline inside a
+# path cannot survive the one-per-line list, so it stops the script instead.
+if [ "$(git diff --cached -z --name-only | tr -dc '\n' | wc -c)" -ne 0 ]; then
+  echo "Error: a staged path contains a newline, which is not supported" >&2
+  exit 1
+fi
+# --no-renames: with rename detection on (git's default), a rename lists only
+# its new path and drops out of --diff-filter=D, so the old path was never
+# deleted and a git mv became a copy.
+git diff --cached -z --no-renames --diff-filter=d --name-only | tr '\0' '\n' > "$WORK/changed"
+git diff --cached -z --no-renames --diff-filter=D --name-only | tr '\0' '\n' > "$WORK/deleted"
 
-  base64 < "$file" | tr -d '\n' > "$WORK/blob.b64"
+while IFS= read -r file; do
+  # Mode and contents come from the index, not the working tree: a partially
+  # staged file, a staged chmod -x, or a symlink (120000, whose blob is the
+  # link target) must be committed as staged.
+  MODE=$(git ls-files --stage -- "$file" | cut -d' ' -f1)
+
+  git cat-file blob ":$file" | base64 | tr -d '\n' > "$WORK/blob.b64"
   BLOB_SHA=$(jq -n --rawfile c "$WORK/blob.b64" \
       '{content: $c, encoding: "base64"}' \
     | gh api -X POST "repos/$REPO/git/blobs" --input - --jq '.sha')
@@ -80,14 +91,14 @@ for file in $(git diff --cached --diff-filter=d --name-only); do
     '. + [{"path": $path, "mode": $mode, "type": "blob", "sha": $sha}]' \
     "$WORK/tree.json" > "$WORK/tree.next"
   mv "$WORK/tree.next" "$WORK/tree.json"
-done
+done < "$WORK/changed"
 
-for file in $(git diff --cached --diff-filter=D --name-only); do
+while IFS= read -r file; do
   jq --arg path "$file" \
     '. + [{"path": $path, "mode": "100644", "type": "blob", "sha": null}]' \
     "$WORK/tree.json" > "$WORK/tree.next"
   mv "$WORK/tree.next" "$WORK/tree.json"
-done
+done < "$WORK/deleted"
 
 if [ "$(jq length "$WORK/tree.json")" -eq 0 ]; then
   echo "Error: No staged changes to commit" >&2
