@@ -52,3 +52,12 @@ jobs:
           docker run --rm -u 65532:65532 \
             -v "${PWD}/claude-code/smoke-test.sh:/tmp/smoke-test.sh:ro" \
             claude-code-smoke:ci bash /tmp/smoke-test.sh
+
+      # openrouter-broker はイメージに焼いてサイドカーで動かすだけで、ここまでのどの
+      # 検査も一度も起動していない。偽の上流（127.0.0.1:443）に向けて、実キーへの
+      # 付け替え・許可リスト・停止の振る舞いを見る。ネットワークには出ない。
+      - name: openrouter-broker test (non-root)
+        run: |
+          docker run --rm -u 65532:65532 \
+            -v "${PWD}/claude-code/openrouter-broker.test.js:/tmp/openrouter-broker.test.js:ro" \
+            claude-code-smoke:ci node /tmp/openrouter-broker.test.js
