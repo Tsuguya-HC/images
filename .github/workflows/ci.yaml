@@ -74,6 +74,9 @@ jobs:
               - '.github/workflows/_hadolint.yml'
               - '.github/workflows/_claude-code-smoke.yml'
               - 'claude-code/**'
+              # claude-code-smoke の cmp は argo-tools/github-signed-commit.sh との一致を見る。
+              # argo-tools 側だけを直した PR でも走らないと、ずれたまま緑で通る。
+              - 'argo-tools/**'
               - 'aqua.yaml'
               - 'aqua-checksums.json'
             workflows:

@@ -15,7 +15,8 @@ metadataTest:
       value: "1"
 
 fileExistenceTests:
-  # argo-tools から COPY で取り出している。--version が無いので実行ビットで見る。
+  # argo-tools/ と同一のファイルを claude-code/ に置いて COPY している（一致は CI の cmp が見る）。
+  # --version が無いので実行ビットで見る。
   - name: github-signed-commit.sh
     path: /usr/local/bin/github-signed-commit.sh
     shouldExist: true
