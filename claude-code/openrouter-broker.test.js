@@ -146,12 +146,28 @@ async function main() {
   check('POST under /api/v1/messages/ is forwarded', sub.status === 200 && seen.length === 1 && seen[0].url === '/api/v1/messages/count_tokens',
     `status ${sub.status}, upstream saw ${JSON.stringify(seen.map((s) => s.url))}`)
 
-  // 拒否する経路: 403 を返し、上流には一切届かない。
+  seen.length = 0
+  const query = await send('POST', '/api/v1/messages?beta=true', { body: '{}' })
+  check('the query string is kept', query.status === 200 && seen.length === 1 && seen[0].url === '/api/v1/messages?beta=true',
+    `status ${query.status}, upstream saw ${JSON.stringify(seen.map((s) => s.url))}`)
+
+  // 拒否する経路: 403 を返し、上流には一切届かない。前方一致だけで判定すると、
+  // ドットセグメントやエンコードした区切りで許可外のエンドポイントへ抜けられる
+  // （上流が RFC 3986 に従ってパスを正規化すれば /api/v1/keys になる）。
   for (const [method, reqPath] of [
     ['GET', '/api/v1/messages'],
     ['POST', '/api/v1/keys'],
     ['POST', '/api/v1/auth/key'],
     ['DELETE', '/api/v1/messages'],
+    ['POST', '/api/v1/messages/../keys'],
+    ['POST', '/api/v1/messages/../../v1/keys?x=1'],
+    ['POST', '/api/v1/messages/%2e%2e/keys'],
+    ['POST', '/api/v1/messages/..%2fkeys'],
+    ['POST', '/api/v1/messages%2f..%2fkeys'],
+    ['POST', '/api/v1/messages/./count_tokens'],
+    ['POST', '/api/v1/messages//count_tokens'],
+    ['POST', '/api/v1/messagesfoo'],
+    ['POST', '/api/v1/messages\\..\\keys'],
   ]) {
     seen.length = 0
     const r = await send(method, reqPath, { body: method === 'GET' ? '' : '{}' })

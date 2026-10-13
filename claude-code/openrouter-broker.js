@@ -21,6 +21,14 @@ const UPSTREAM = process.env.BROKER_UPSTREAM || 'openrouter.ai'
 // エンドポイントに実キーで到達させない。
 const ALLOW_PREFIX = process.env.BROKER_ALLOW_PREFIX || '/api/v1/messages'
 const ALLOW_METHODS = new Set(['POST'])
+// パスは書かれたまま上流へ送る。前方一致だけで判定すると `/api/v1/messages/../keys` や
+// `%2e%2e`・`%2f` のような、上流が正規化すれば許可外のエンドポイントになる形まで
+// 実キー付きで通してしまう。下位パスは英数字・`_`・`-` だけのセグメントに限り、
+// `.` や `%`、空のセグメント、`\` を含むものは通さない。
+const SUBPATH = /^(\/[A-Za-z0-9_-]+)*$/
+function allowedPath(path) {
+  return path.startsWith(ALLOW_PREFIX) && SUBPATH.test(path.slice(ALLOW_PREFIX.length))
+}
 // 停止は publish サイドカーと terminationGracePeriodSeconds を分け合う。kubelet は
 // サイドカーを init の逆順で止めるので、ここで手間取ると publish が verdict を
 // seal する前に Pod ごと SIGKILL される。開いた接続ごと畳んで、それでも返らなければ
@@ -48,7 +56,7 @@ const agent = new https.Agent({ keepAlive: true })
 
 const server = http.createServer((req, res) => {
   const path = (req.url || '').split('?')[0]
-  if (!ALLOW_METHODS.has(req.method || '') || !path.startsWith(ALLOW_PREFIX)) {
+  if (!ALLOW_METHODS.has(req.method || '') || !allowedPath(path)) {
     // 拒否したことは残す（診断のため）。本文は出さない。
     console.error(`openrouter-broker: rejected ${req.method} ${path}`)
     res.writeHead(403, { 'content-type': 'text/plain' })
