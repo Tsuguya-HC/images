@@ -61,3 +61,10 @@ jobs:
           docker run --rm -u 65532:65532 \
             -v "${PWD}/claude-code/openrouter-broker.test.js:/tmp/openrouter-broker.test.js:ro" \
             claude-code-smoke:ci node /tmp/openrouter-broker.test.js
+      # github-signed-commit.sh の振る舞い（staged の内容とモードでコミットを作るか）。
+      # gh は偽物、origin はローカルの bare リポジトリで、ネットワークには出ない。
+      - name: github-signed-commit.sh test (non-root)
+        run: |
+          docker run --rm -u 65532:65532 \
+            -v "${PWD}/claude-code/github-signed-commit.test.sh:/tmp/github-signed-commit.test.sh:ro" \
+            claude-code-smoke:ci bash /tmp/github-signed-commit.test.sh

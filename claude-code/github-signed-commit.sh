@@ -63,15 +63,12 @@ trap 'exit 143' TERM
 echo '[]' > "$WORK/tree.json"
 
 for file in $(git diff --cached --diff-filter=d --name-only); do
-  if git diff --cached --summary "$file" | grep -q 'mode change.*100755'; then
-    MODE="100755"
-  elif test -x "$file"; then
-    MODE="100755"
-  else
-    MODE="100644"
-  fi
+  # Mode and contents come from the index, not the working tree: a partially
+  # staged file, a staged chmod -x, or a symlink (120000, whose blob is the
+  # link target) must be committed as staged.
+  MODE=$(git ls-files --stage -- "$file" | cut -d' ' -f1)
 
-  base64 < "$file" | tr -d '\n' > "$WORK/blob.b64"
+  git cat-file blob ":$file" | base64 | tr -d '\n' > "$WORK/blob.b64"
   BLOB_SHA=$(jq -n --rawfile c "$WORK/blob.b64" \
       '{content: $c, encoding: "base64"}' \
     | gh api -X POST "repos/$REPO/git/blobs" --input - --jq '.sha')
