@@ -156,4 +156,50 @@ else
   ng "symlink run failed"
 fi
 
+# --- 空白や非 ASCII を含むパス -----------------------------------------------
+# git は既定（core.quotePath=true）で非 ASCII や `"` を含むパスを "\346..." の形に
+# クォートして出す。空白は単語分割に掛かる。
+new_repo names
+mkdir -p 'sub dir'
+printf 'space\n' > 'with space.txt'
+printf 'jp\n' > '日本語.md'
+printf 'quote\n' > 'a"b.txt'
+printf 'nested\n' > 'sub dir/x y.txt'
+git add 'with space.txt' '日本語.md' 'a"b.txt' 'sub dir/x y.txt'
+if run_sc; then
+  # 対象は最後に origin へ reset --hard するので、期待値は index ではなく直書きで持つ。
+  for pw in 'with space.txt=space' '日本語.md=jp' 'a"b.txt=quote' 'sub dir/x y.txt=nested'; do
+    p="${pw%=*}" want="${pw##*=}"
+    [ "$(blob_of "${p}")" = "${want}" ] && ok "path '${p}' is sent" || ng "path '${p}': $(entry "${p}")"
+  done
+else
+  ng "run with spaces and non-ASCII paths failed"
+fi
+
+new_repo names-delete
+printf 'x\n' > 'gone soon.txt' && printf 'y\n' > 'もうすぐ消える.txt'
+git add -A && git commit -qm more && git push -q origin HEAD:main 2>/dev/null
+GH_STUB_HEAD="$(git rev-parse HEAD)"
+git rm -q 'gone soon.txt' 'もうすぐ消える.txt'
+if run_sc; then
+  for p in 'gone soon.txt' 'もうすぐ消える.txt'; do
+    [ "$(jq -c --arg p "${p}" '.tree[] | select(.path == $p) | .sha' "${GH_STUB_LOG}/tree.json")" = null ] \
+      && ok "deleted path '${p}' is sent with sha null" || ng "deleted path '${p}' missing from the tree"
+  done
+else
+  ng "deleting paths with spaces and non-ASCII failed"
+fi
+
+# 改行を含むパスは扱えないので、別のパスとしてコミットせずに止まる。
+new_repo names-newline
+printf 'nl\n' > "$(printf 'line\nbreak.txt')"
+git add -A
+if out="$(PATH="${root}/bin:${PATH}" GH_TOKEN=stub sh "${SC}" -r o/r -b main -m msg 2>&1)"; then
+  ng "a path with a newline was accepted"
+elif printf '%s' "${out}" | grep -qF 'contains a newline' && ! grep -q 'git/blobs' "${GH_STUB_LOG}/calls"; then
+  ok "a path with a newline stops the script before anything is sent"
+else
+  ng "a path with a newline: ${out}"
+fi
+
 exit "${fail}"
