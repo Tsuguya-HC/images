@@ -156,6 +156,26 @@ else
   ng "symlink run failed"
 fi
 
+# --- 名前の変更 -----------------------------------------------------------------
+# git diff は既定で rename を検出し、--name-only には新しい側しか出さず、
+# --diff-filter=D からは古い側が消える。古い側を消さないと rename がコピーになる。
+new_repo rename
+git mv plain.txt renamed.txt
+git mv exec.sh moved.sh
+echo more >> moved.sh
+git add moved.sh
+if run_sc; then
+  [ "$(blob_of renamed.txt)" = plain ] && ok "the new side of a rename is sent" || ng "renamed.txt: $(entry renamed.txt)"
+  [ "$(entry moved.sh | cut -d' ' -f1)" = 100755 ] && ok "the new side of a modified rename keeps its mode" \
+    || ng "moved.sh: $(entry moved.sh)"
+  for p in plain.txt exec.sh; do
+    [ "$(jq -c --arg p "${p}" '.tree[] | select(.path == $p) | .sha' "${GH_STUB_LOG}/tree.json")" = null ] \
+      && ok "the old side of a rename (${p}) is deleted" || ng "the old side of a rename (${p}) is not deleted"
+  done
+else
+  ng "rename run failed"
+fi
+
 # --- 空白や非 ASCII を含むパス -----------------------------------------------
 # git は既定（core.quotePath=true）で非 ASCII や `"` を含むパスを "\346..." の形に
 # クォートして出す。空白は単語分割に掛かる。

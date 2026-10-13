@@ -70,8 +70,11 @@ if [ "$(git diff --cached -z --name-only | tr -dc '\n' | wc -c)" -ne 0 ]; then
   echo "Error: a staged path contains a newline, which is not supported" >&2
   exit 1
 fi
-git diff --cached -z --diff-filter=d --name-only | tr '\0' '\n' > "$WORK/changed"
-git diff --cached -z --diff-filter=D --name-only | tr '\0' '\n' > "$WORK/deleted"
+# --no-renames: with rename detection on (git's default), a rename lists only
+# its new path and drops out of --diff-filter=D, so the old path was never
+# deleted and a git mv became a copy.
+git diff --cached -z --no-renames --diff-filter=d --name-only | tr '\0' '\n' > "$WORK/changed"
+git diff --cached -z --no-renames --diff-filter=D --name-only | tr '\0' '\n' > "$WORK/deleted"
 
 while IFS= read -r file; do
   # Mode and contents come from the index, not the working tree: a partially
