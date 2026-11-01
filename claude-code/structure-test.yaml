@@ -85,7 +85,7 @@ commandTests:
     command: node
     args: [--version]
     # renovate: datasource=node-version depName=node extractVersion=^v?(?<version>.*)$
-    expectedOutput: ["^v24.21.0\\b"]
+    expectedOutput: ["^v26.13.0\\b"]
   - name: PyYAML
     command: python3
     args: [-c, "import yaml; print(yaml.__version__)"]
