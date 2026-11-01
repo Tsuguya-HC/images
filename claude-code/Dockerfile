@@ -55,7 +55,7 @@ ARG LOGCLI_VERSION=3.7.8
 # renovate: datasource=golang-version depName=go extractVersion=^v?(?<version>.*)$
 ARG GO_VERSION=1.27.1
 # renovate: datasource=node-version depName=node extractVersion=^v?(?<version>.*)$
-ARG NODE_VERSION=24.21.0
+ARG NODE_VERSION=26.13.0
 # renovate: datasource=pypi depName=PyYAML extractVersion=^(?<version>.*)$
 ARG PYYAML_VERSION=6.0.3
 
